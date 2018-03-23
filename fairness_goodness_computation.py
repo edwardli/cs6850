@@ -1,4 +1,4 @@
-'''
+"""
 Code for the paper:
 Edge Weight Prediction in Weighted Signed Networks. 
 Conference: ICDM 2016
@@ -6,12 +6,72 @@ Authors: Srijan Kumar, Francesca Spezzano, VS Subrahmanian and Christos Faloutso
 
 Author of code: Srijan Kumar
 Email of code author: srijan@cs.stanford.edu
-'''
 
-import networkx as nx
+Modifications by: Edward Li, John Hughes, James Chen
+"""
+
 import math
+import networkx as nx
+import random
+import sys
 
-def initiliaze_scores(G):
+def main():
+    file_name = sys.argv[1]
+    percentage_omit = float(sys.argv[2])
+
+    assert 0.0 <= percentage_omit <= 1.0
+
+    edges = []
+    with open(file_name, 'r') as f:
+        for l in f:
+            ls = l.strip().split(",")
+            edges.append((ls[0], ls[1], float(ls[2])))
+
+    # Pick percentage of edges to omit at random
+    random.shuffle(edges)
+    boundary = int(percentage_omit*len(edges))
+    test_edges = edges[:boundary]
+    known_edges = edges[boundary:]
+
+    G = nx.DiGraph()
+    for u, v, w in known_edges:
+        G.add_edge(u, v, weight=w)
+
+    # these two dictionaries have the required scores
+    fairness, goodness = compute_fairness_goodness(G, 1)
+
+    squared_error = 0
+    error = 0
+    n = 0
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = fairness[u] * goodness[v]
+            squared_error += (w - predicted_w)**2
+            error += abs(w - predicted_w)
+            n += 1
+
+    print "RMS error 1: %f" % math.sqrt(squared_error / n)
+    print "Aboslute mean error: %f" % (error / n)
+
+    fairness, goodness = compute_fairness_goodness(G, 0)
+
+    squared_error = 0
+    error = 0
+    n = 0
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = fairness[u] * goodness[v]
+            squared_error += (w - predicted_w) ** 2
+            error += abs(w - predicted_w)
+            n += 1
+
+    print "RMS error 2: %f" % math.sqrt(squared_error / n)
+    print "Aboslute mean error: %f" % (error / n)
+
+
+def initialize_scores(G):
     fairness = {}
     goodness = {}
     
@@ -24,24 +84,20 @@ def initiliaze_scores(G):
             goodness[node] = 0
     return fairness, goodness
 
-def compute_fairness_goodness(G):
+def compute_fairness_goodness(G, coeff=1, maxiter=100, epsilon=1e-6):
     fairness, goodness = initialize_scores(G)
     
     nodes = G.nodes()
     iter = 0
-    while iter < 100:
+    while iter < maxiter:
         df = 0
         dg = 0
 
-        print '-----------------'
-        print "Iteration number", iter
-        
-        print 'Updating goodness'
         for node in nodes:
             inedges = G.in_edges(node, data='weight')
             g = 0
             for edge in inedges:
-                g += fairness[edge[0]]*edge[2]["weight"]
+                g += fairness[edge[0]]*edge[2]
 
             try:
                 dg += abs(g/len(inedges) - goodness[node])
@@ -49,36 +105,27 @@ def compute_fairness_goodness(G):
             except:
                 pass
 
-        print 'Updating fairness'
         for node in nodes:
             outedges = G.out_edges(node, data='weight')
-            f = 0
+            f = 0.0
             for edge in outedges:
-                f += 1.0 - abs(edge[2] - goodness[edge[1]])/2.0
+                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]])/2.0
             try:
                 df += abs(f/len(outedges) - fairness[node])
                 fairness[node] = f/len(outedges)
             except:
                 pass
-        
-        print 'Differences in fairness score and goodness score = %.2f, %.2f' % (df, dg)
-        if df < math.pow(10, -6) and dg < math.pow(10, -6):
+
+        if df < epsilon and dg < epsilon:
             break
+
         iter+=1
-    
+
+    print "Total iterations: %d" % iter
+
     return fairness, goodness
 
-skip = int(sys.argv[1])
 
-G = nx.DiGraph()
-
-f = open("network.csv","r")
-for l in f:
-    ls = l.strip().split(",")
-    G.add_edge(ls[0], ls[1], weight = float(ls[2])) ## the weight should already be in the range of -1 to 1
-f.close()
-
-
-# these two dictionaries have the required scores
-fairness, goodness = compute_fairness_goodness(G)
+if __name__ == '__main__':
+    main()
 
