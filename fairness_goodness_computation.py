@@ -9,11 +9,16 @@ Email of code author: srijan@cs.stanford.edu
 
 Modifications by: Edward Li, John Hughes, James Chen
 """
+import matplotlib as mpl
+mpl.use('TkAgg') # Default backend doesn't work on MacOS for some reason
 
 import math
 import networkx as nx
 import random
 import sys
+import matplotlib.pyplot as plt
+
+average_errors = []
 
 def main():
     file_name = sys.argv[1]
@@ -54,7 +59,8 @@ def main():
     print "RMS error 1: %f" % math.sqrt(squared_error / n)
     print "Aboslute mean error: %f" % (error / n)
 
-    fairness, goodness = compute_fairness_goodness(G, 0)
+    #fairness, goodness = compute_fairness_goodness(G, 2)
+    print(sum(fairness.values()) / len(fairness.values()))
 
     squared_error = 0
     error = 0
@@ -62,13 +68,37 @@ def main():
 
     for u, v, w in test_edges:
         if u in fairness and v in goodness:
-            predicted_w = fairness[u] * goodness[v]
+            predicted_w = predict(G, u, v, goodness)#fairness[u] * goodness[v]
             squared_error += (w - predicted_w) ** 2
             error += abs(w - predicted_w)
             n += 1
 
     print "RMS error 2: %f" % math.sqrt(squared_error / n)
     print "Aboslute mean error: %f" % (error / n)
+
+    plt.hist(average_errors, 50)
+    plt.show()
+
+def predict(G, u, v, goodness):
+    out_edges = G.out_edges(u, data="weight")
+    #if len(out_edges) <= 5:
+    return goodness[v]
+
+    average_error = 0.0
+    for _, w, weight in out_edges:
+        average_error += weight - goodness[w]
+
+    average_error /= len(out_edges)
+    average_errors.append(average_error)
+
+    prediction = goodness[v] + average_error
+    if prediction < -1:
+        return -1
+    if prediction > 1:
+        return 1
+
+    return prediction
+
 
 
 def initialize_scores(G):
