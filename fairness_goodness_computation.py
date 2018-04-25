@@ -18,13 +18,8 @@ import random
 import sys
 import matplotlib.pyplot as plt
 
-average_errors = []
-
 def main():
     file_name = sys.argv[1]
-    percentage_omit = float(sys.argv[2])
-
-    assert 0.0 <= percentage_omit <= 1.0
 
     edges = []
     with open(file_name, 'r') as f:
@@ -34,62 +29,76 @@ def main():
 
     # Pick percentage of edges to omit at random
     random.shuffle(edges)
-    boundary = int(percentage_omit*len(edges))
-    test_edges = edges[:boundary]
-    known_edges = edges[boundary:]
+    rms_errors = []
+    for percentage_omit in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+        rms_error = []
+        boundary = int(percentage_omit*len(edges))
+        test_edges = edges[:boundary]
+        known_edges = edges[boundary:]
 
-    G = nx.DiGraph()
-    for u, v, w in known_edges:
-        G.add_edge(u, v, weight=w)
+        G = nx.DiGraph()
+        for u, v, w in known_edges:
+            G.add_edge(u, v, weight=w)
 
-    # these two dictionaries have the required scores
-    fairness, goodness = compute_fairness_goodness(G, 1)
+        # these two dictionaries have the required scores
+        fairness, goodness = compute_fairness_goodness(G, 1)
 
-    squared_error = 0
-    error = 0
-    n = 0
+        squared_error = 0
+        error = 0
+        n = 0
 
-    for u, v, w in test_edges:
-        if u in fairness and v in goodness:
-            predicted_w = fairness[u] * goodness[v]
-            squared_error += (w - predicted_w)**2
-            error += abs(w - predicted_w)
-            n += 1
+        for u, v, w in test_edges:
+            if u in fairness and v in goodness:
+                predicted_w = fairness[u] * goodness[v]
+                squared_error += (w - predicted_w)**2
+                error += abs(w - predicted_w)
+                n += 1
 
-    print "RMS error 1: %f" % math.sqrt(squared_error / n)
-    print "Aboslute mean error: %f" % (error / n)
+        print "RMS error 1: %f" % math.sqrt(squared_error / n)
+        print "Aboslute mean error: %f" % (error / n)
+        rms_error.append(math.sqrt(squared_error / n))
 
-    #fairness, goodness = compute_fairness_goodness(G, 2)
-    print(sum(fairness.values()) / len(fairness.values()))
+        #print(sum(fairness.values()) / len(fairness.values()))
 
-    squared_error = 0
-    error = 0
-    n = 0
+        for prediction_type in ("goodness", "bias", "exclude"):
+            squared_error = 0
+            error = 0
+            n = 0
 
-    for u, v, w in test_edges:
-        if u in fairness and v in goodness:
-            predicted_w = predict(G, u, v, goodness)#fairness[u] * goodness[v]
-            squared_error += (w - predicted_w) ** 2
-            error += abs(w - predicted_w)
-            n += 1
+            for u, v, w in test_edges:
+                if u in fairness and v in goodness:
+                    predicted_w = predict(G, u, v, goodness, prediction_type)
+                    squared_error += (w - predicted_w) ** 2
+                    error += abs(w - predicted_w)
+                    n += 1
 
-    print "RMS error 2: %f" % math.sqrt(squared_error / n)
-    print "Aboslute mean error: %f" % (error / n)
+            print "Prediction type is " + prediction_type
+            print "RMS error 2: %f" % math.sqrt(squared_error / n)
+            print "Aboslute mean error: %f" % (error / n)
+            rms_error.append(math.sqrt(squared_error / n))
 
-    plt.hist(average_errors, 50)
-    plt.show()
+        rms_errors.append(rms_error)
 
-def predict(G, u, v, goodness):
+        # plt.hist(average_errors, 50)
+        # plt.show()
+
+    print rms_errors
+
+def predict(G, u, v, goodness, prediction_type="bias"):
+    """
+    prediction_type is one of "bias", "goodness", or "exclude".
+    """
     out_edges = G.out_edges(u, data="weight")
-    #if len(out_edges) <= 5:
-    return goodness[v]
+    if (len(out_edges) == 0
+        or prediction_type == "goodness"
+        or prediction_type == "exclude" and len(out_edges) <= 5):
+        return goodness[v]
 
     average_error = 0.0
     for _, w, weight in out_edges:
         average_error += weight - goodness[w]
 
     average_error /= len(out_edges)
-    average_errors.append(average_error)
 
     prediction = goodness[v] + average_error
     if prediction < -1:
