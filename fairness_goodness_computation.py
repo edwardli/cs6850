@@ -12,6 +12,7 @@ Modifications by: Edward Li, John Hughes, James Chen
 import matplotlib as mpl
 mpl.use('TkAgg') # Default backend doesn't work on MacOS for some reason
 
+import numpy as np
 import math
 import networkx as nx
 import random
@@ -20,6 +21,7 @@ import matplotlib.pyplot as plt
 
 def main():
     file_name = sys.argv[1]
+    test_type = sys.argv[2] #"l1" or "per" (for leave out one edge or remove percentage of edges)
 
     edges = []
     with open(file_name, 'r') as f:
@@ -32,32 +34,74 @@ def main():
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
     rms_errors = []
-    for percentage_omit in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
-        rms_error = []
-        boundary = int(percentage_omit*len(edges))
-        test_edges = edges[:boundary]
-        known_edges = edges[boundary:]
 
-        G = nx.DiGraph()
-        for u, v, w in known_edges:
-            G.add_edge(u, v, weight=w)
+    if test_type == "l1":
+        for i in range(50):
+            test_edges = [edges.pop(i)]
+            rms_error = computeRMS(test_edges, edges)
+            if rms_error:
+                rms_errors.append(rms_error)
+            edges.insert(i,test_edges[0])
+    elif test_type == "per":
+        for percentage_omit in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+            boundary = int(percentage_omit*len(edges))
+            test_edges = edges[:boundary]
+            known_edges = edges[boundary:]
+            rms_error = computeRMS(test_edges, known_edges)
+            if rms_error:
+                rms_errors.append(rms_error)
 
-        # these two dictionaries have the required scores
-        fairness, goodness = compute_fairness_goodness(G, 1)
+        # plt.hist(average_errors, 50)
+        # plt.show()
+    rms_errors = np.array(rms_errors)
+    rms_means = np.mean(rms_errors,axis=0)
+    print rms_errors
+    print rms_means
+    print rms_errors.shape
 
+def computeRMS(test_edges, known_edges):
+    rms_error = []
+    G = nx.DiGraph()
+    for u, v, w in known_edges:
+        G.add_edge(u, v, weight=w)
+
+    # these two dictionaries have the required scores
+    fairness, goodness = compute_fairness_goodness(G, 1)
+
+    squared_error = 0.
+    error = 0.
+    n = 0.
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = fairness[u] * goodness[v]
+            squared_error += (w - predicted_w)**2
+            error += abs(w - predicted_w)
+            n += 1
+
+    if n==0: #Every edge in test_edges has only 1 edge connected to the graph and it was removed
+        return None
+    # print "RMS error 1: %f" % math.sqrt(squared_error / n)
+    # print "Aboslute mean error: %f" % (error / n)
+    rms_error.append(math.sqrt(squared_error / n))
+
+    #print(sum(fairness.values()) / len(fairness.values()))
+
+    for prediction_type in ("goodness", "bias", "exclude"):
         squared_error = 0
         error = 0
         n = 0
 
         for u, v, w in test_edges:
             if u in fairness and v in goodness:
-                predicted_w = fairness[u] * goodness[v]
-                squared_error += (w - predicted_w)**2
+                predicted_w = predict(G, u, v, goodness, prediction_type)
+                squared_error += (w - predicted_w) ** 2
                 error += abs(w - predicted_w)
                 n += 1
 
-        print "RMS error 1: %f" % math.sqrt(squared_error / n)
-        print "Aboslute mean error: %f" % (error / n)
+        # print "Prediction type is " + prediction_type
+        # print "RMS error 2: %f" % math.sqrt(squared_error / n)
+        # print "Aboslute mean error: %f" % (error / n)
         rms_error.append(math.sqrt(squared_error / n))
 
         #print(sum(fairness.values()) / len(fairness.values()))
@@ -108,6 +152,7 @@ def main():
 
     print rms_errors
 
+
 def predict(G, u, v, goodness, prediction_type="bias"):
     """
     prediction_type is one of "bias", "goodness", or "exclude".
@@ -131,8 +176,6 @@ def predict(G, u, v, goodness, prediction_type="bias"):
         return 1
 
     return prediction
-
-
 
 def initialize_scores(G):
     fairness = {}
@@ -184,7 +227,7 @@ def compute_fairness_goodness(G, coeff=1, maxiter=100, epsilon=1e-6):
 
         iter+=1
 
-    print "Total iterations: %d" % iter
+    # print "Total iterations: %d" % iter
 
     return fairness, goodness
 
