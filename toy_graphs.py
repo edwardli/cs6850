@@ -32,7 +32,7 @@ def main():
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
     rms_errors = []
-    for percentage_omit in [0.2]:
+    for percentage_omit in [0.5]:
         rms_error = []
         boundary = int(percentage_omit*len(edges))
         test_edges = edges[:boundary]
@@ -50,44 +50,48 @@ def main():
         n = 0
         ftimesg_predictions = []
         off_amount = []
+        fairs = []
+        goods = []
+        for u, v, w in test_edges:
+            if u in fairness and v in goodness:
+                predicted_w = fairness[u] * goodness[v]
+                fairs.append(fairness[u])
+                goods.append(goodness[v])
+                ftimesg_predictions.append(predicted_w)
+                squared_error += (w - predicted_w)**2
+                off_amount.append(w)
+                error += abs(w - predicted_w)
+                n += 1
 
-        # for u, v, w in test_edges:
-        #     if u in fairness and v in goodness:
-        #         predicted_w = fairness[u] * goodness[v]
-        #         ftimesg_predictions.append(predicted_w)
-        #         squared_error += (w - predicted_w)**2
-        #         off_amount.append(predicted_w - w)
-        #         error += abs(w - predicted_w)
-        #         n += 1
+        print "RMS error 1: %f" % math.sqrt(squared_error / n)
+        print "Aboslute mean error: %f" % (error / n)
+        rms_error.append(math.sqrt(squared_error / n))
+
+        # ftimesg_predictions = []
+        # off_amount = []
+        # for prediction_type in ["goodness"]:
+        #     squared_error = 0
+        #     error = 0
+        #     n = 0
         #
-        # print "RMS error 1: %f" % math.sqrt(squared_error / n)
-        # print "Aboslute mean error: %f" % (error / n)
-        # rms_error.append(math.sqrt(squared_error / n))
+        #     for u, v, w in test_edges:
+        #         if u in fairness and v in goodness:
+        #             predicted_w = predict(G, u, v, goodness, prediction_type)
+        #             ftimesg_predictions.append(predicted_w)
+        #             squared_error += (w - predicted_w) ** 2
+        #             off_amount.append(w)
+        #             error += abs(w - predicted_w)
+        #             n += 1
+        #
+        #     print "Prediction type is " + prediction_type
+        #     print "RMS error 2: %f" % math.sqrt(squared_error / n)
+        #     print "Aboslute mean error: %f" % (error / n)
+        #     rms_error.append(math.sqrt(squared_error / n))
 
-        ftimesg_predictions = []
-        off_amount = []
-        for prediction_type in ["goodness"]:
-            squared_error = 0
-            error = 0
-            n = 0
-
-            for u, v, w in test_edges:
-                if u in fairness and v in goodness:
-                    predicted_w = predict(G, u, v, goodness, prediction_type)
-                    ftimesg_predictions.append(predicted_w)
-                    squared_error += (w - predicted_w) ** 2
-                    off_amount.append(predicted_w - w)
-                    error += abs(w - predicted_w)
-                    n += 1
-
-            print "Prediction type is " + prediction_type
-            print "RMS error 2: %f" % math.sqrt(squared_error / n)
-            print "Aboslute mean error: %f" % (error / n)
-            rms_error.append(math.sqrt(squared_error / n))
-
-    plt.scatter(ftimesg_predictions, off_amount)
-    plt.xlabel('f*g')
-    plt.ylabel('f*g - actual')
+    plt.scatter(fairs, goods)
+    plt.xlabel('Fairness')
+    plt.ylabel('Goodness')
+    plt.title('Evaluation on RFA')
     plt.show()
     #print(sum(fairness.values()) / len(fairness.values()))
 

@@ -1,6 +1,6 @@
 """
 Code for the paper:
-Edge Weight Prediction in Weighted Signed Networks. 
+Edge Weight Prediction in Weighted Signed Networks.
 Conference: ICDM 2016
 Authors: Srijan Kumar, Francesca Spezzano, VS Subrahmanian and Christos Faloutsos
 
@@ -66,15 +66,18 @@ def computeRMS(test_edges, known_edges):
         G.add_edge(u, v, weight=w)
 
     # these two dictionaries have the required scores
-    fairness, goodness = compute_fairness_goodness(G, 1)
+    bias, goodness = compute_bias_goodness(G, 1)
 
     squared_error = 0.
     error = 0.
     n = 0.
-
+    min_good = 100
+    max_good = -100
     for u, v, w in test_edges:
-        if u in fairness and v in goodness:
-            predicted_w = fairness[u] * goodness[v]
+        if u in bias and v in goodness:
+            predicted_w = bias[u] + goodness[v]
+            min_good = goodness[v] if goodness[v] < min_good else min_good
+            max_good = goodness[v] if goodness[v] > max_good else max_good
             squared_error += (w - predicted_w)**2
             error += abs(w - predicted_w)
             n += 1
@@ -83,6 +86,7 @@ def computeRMS(test_edges, known_edges):
         return None
     print "RMS error 1: %f" % math.sqrt(squared_error / n)
     print "Aboslute mean error: %f" % (error / n)
+    print(min_good, max_good)
     rms_error.append(math.sqrt(squared_error / n))
 
     #print(sum(fairness.values()) / len(fairness.values()))
@@ -178,60 +182,67 @@ def predict(G, u, v, goodness, prediction_type="bias"):
     return prediction
 
 def initialize_scores(G):
-    fairness = {}
+    bias = {}
     goodness = {}
-    
+
     nodes = G.nodes()
     for node in nodes:
-        fairness[node] = 1
+        bias[node] = 1
         try:
             goodness[node] = G.in_degree(node, weight='weight')*1.0/G.in_degree(node)
         except:
             goodness[node] = 0
-    return fairness, goodness
+    return bias, goodness
 
-def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-6):
-    fairness, goodness = initialize_scores(G)
-    
+def compute_bias_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
+    bias, goodness = initialize_scores(G)
+
     nodes = G.nodes()
     iter = 0
     while iter < maxiter:
-        if iter == maxiter:
+        if iter == maxiter - 1:
             print("FUCK")
-        df = 0
+        db = 0
         dg = 0
-
+        nums = 0
         for node in nodes:
             inedges = G.in_edges(node, data='weight')
             g = 0
             for edge in inedges:
-                g += fairness[edge[0]]*edge[2]
+                g += edge[2] + bias[edge[0]]
 
             try:
                 dg += abs(g/len(inedges) - goodness[node])
+                if abs(g/len(inedges) - goodness[node]) > 0.001:
+                    # print(abs(g/len(inedges) - goodness[node]))
+                    nums += 1
                 goodness[node] = g/len(inedges)
             except:
                 pass
 
+        # print(nums)
         for node in nodes:
             outedges = G.out_edges(node, data='weight')
-            f = 0.0
+            b = 0.0
             for edge in outedges:
-                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]])/2.0
+                b += edge[2] - goodness[edge[1]]
             try:
-                df += abs(f/len(outedges) - fairness[node])
-                fairness[node] = f/len(outedges)
+                db += abs(b/len(outedges) - bias[node])
+                bias[node] = b/len(outedges)
             except:
                 pass
 
-        if df < epsilon and dg < epsilon:
+        # print(db, dg)
+        # print("\n\n")
+
+        if db < epsilon and dg < epsilon:
             break
 
         iter+=1
 
     # print "Total iterations: %d" % iter
 
-    return fairness, goodness
+    return bias, goodness
 
 
 if __name__ == '__main__':
