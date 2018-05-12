@@ -51,13 +51,12 @@ def main():
             if rms_error:
                 rms_errors.append(rms_error)
 
-        # plt.hist(average_errors, 50)
-        # plt.show()
     rms_errors = np.array(rms_errors)
     rms_means = np.mean(rms_errors,axis=0)
-    print rms_errors
     print rms_means
     print rms_errors.shape
+
+    plotRMSErrors(rms_errors)
 
 def computeRMS(test_edges, known_edges):
     rms_error = []
@@ -106,52 +105,7 @@ def computeRMS(test_edges, known_edges):
 
         #print(sum(fairness.values()) / len(fairness.values()))
 
-        for prediction_type in ("goodness", "bias", "exclude"):
-            squared_error = 0
-            error = 0
-            n = 0
-
-            for u, v, w in test_edges:
-                if u in fairness and v in goodness:
-                    predicted_w = predict(G, u, v, goodness, prediction_type)
-                    squared_error += (w - predicted_w) ** 2
-                    error += abs(w - predicted_w)
-                    n += 1
-
-            print "Prediction type is " + prediction_type
-            print "RMS error 2: %f" % math.sqrt(squared_error / n)
-            print "Aboslute mean error: %f" % (error / n)
-            rms_error.append(math.sqrt(squared_error / n))
-
-        rms_errors.append(rms_error)
-    # Do graphing
-    omit_values = [x * 10 for x in range(1, 10)]
-    f_times_g_rms = []
-    goodness_rms = []
-    goodness_and_bias = []
-    exclude = []
-    for rms_error in rms_errors:
-        f_times_g_rms.append(rms_error[0])
-        goodness_rms.append(rms_error[1])
-        goodness_and_bias.append(rms_error[2])
-        exclude.append(rms_error[3])
-    print(omit_values)
-    print(f_times_g_rms)
-    # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
-    #          goodness_and_bias, 'y.-', 'hello', omit_values, exclude, 'g.-', 'hello',)
-    line_fg, = plt.plot(omit_values, f_times_g_rms, 'b.-', label = 'Fairness*Goodness')
-    line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
-    line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
-    line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
-    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_exclude])
-    plt.xlabel('Percentage of edges removed')
-    plt.ylabel('Root Mean Square Error')
-    plt.title("Wikipedia RFA")
-    plt.show()
-    plt.savefig('omit_results.png')
-
-    print rms_errors
-
+    return rms_error
 
 def predict(G, u, v, goodness, prediction_type="bias"):
     """
@@ -176,6 +130,13 @@ def predict(G, u, v, goodness, prediction_type="bias"):
         return 1
 
     return prediction
+
+"""
+The node exclusion algorithm returns goodness for nodes with less than k out edges.
+This returns an estimation of the optimal value k.
+"""
+def learn_exclude_number(known_edges):
+    return
 
 def initialize_scores(G):
     fairness = {}
@@ -230,6 +191,36 @@ def compute_fairness_goodness(G, coeff=1, maxiter=100, epsilon=1e-6):
     # print "Total iterations: %d" % iter
 
     return fairness, goodness
+
+# Plot RMS Errors for 1. f*g 2. g 3. g+b 4. g+b with Exclusion
+def plotRMSErrors(rms_errors):
+    # Do graphing
+    omit_values = [x * 10 for x in range(1, 10)]
+    f_times_g_rms = []
+    goodness_rms = []
+    goodness_and_bias = []
+    exclude = []
+    for rms_error in rms_errors:
+        f_times_g_rms.append(rms_error[0])
+        goodness_rms.append(rms_error[1])
+        goodness_and_bias.append(rms_error[2])
+        exclude.append(rms_error[3])
+    print(omit_values)
+    print(f_times_g_rms)
+    # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
+    #          goodness_and_bias, 'y.-', 'hello', omit_values, exclude, 'g.-', 'hello',)
+    line_fg, = plt.plot(omit_values, f_times_g_rms, 'b.-', label = 'Fairness*Goodness')
+    line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
+    line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
+    line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
+    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_exclude])
+    plt.xlabel('Percentage of edges removed')
+    plt.ylabel('Root Mean Square Error')
+    plt.title("Wikipedia RFA")
+    plt.show()
+    plt.savefig('omit_results.png')
+
+    print rms_errors
 
 
 if __name__ == '__main__':
