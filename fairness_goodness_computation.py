@@ -31,12 +31,12 @@ def main():
             edges.append((ls[0], ls[1], float(ls[2])))
 
     # Pick percentage of edges to omit at random
-    random.shuffle(edges)
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
     rms_errors = []
 
     if test_type == "l1":
+        random.shuffle(edges)
         for i in range(50):
             test_edges = [edges.pop(i)]
             rms_error = computeRMS(test_edges, edges)
@@ -45,6 +45,7 @@ def main():
             edges.insert(i,test_edges[0])
     elif test_type == "per":
         for percentage_omit in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+            random.shuffle(edges)
             boundary = int(percentage_omit*len(edges))
             test_edges = edges[:boundary]
             known_edges = edges[boundary:]
@@ -59,17 +60,10 @@ def main():
     print rms_means
     print rms_errors.shape
 
-    plotRMSErrors(rms_errors,file_name)
+    if test_type == "per":
+        plotRMSErrors(rms_errors,file_name)
 
 def computeRMS(test_edges, known_edges):
-    #Get best k value for exclude method
-    # k = learn_exclude_number2(known_edges)
-    # print k
-    k=5
-
-
-
-    rms_error = []
     G = nx.DiGraph()
     for u, v, w in known_edges:
         G.add_edge(u, v, weight=w)
@@ -90,13 +84,10 @@ def computeRMS(test_edges, known_edges):
 
     if n==0: #Every edge in test_edges has only 1 edge connected to the graph and it was removed
         return None
-    # print "RMS error 1: %f" % math.sqrt(squared_error / n)
-    # print "Aboslute mean error: %f" % (error / n)
+
+    rms_error = []
     rms_error.append(math.sqrt(squared_error / n))
 
-    #print(sum(fairness.values()) / len(fairness.values()))
-
-    c=3
     for prediction_type in ("goodness", "bias", "biasc", "exclude", "excludec"):
         squared_error = 0
         error = 0
@@ -104,31 +95,29 @@ def computeRMS(test_edges, known_edges):
 
         for u, v, w in test_edges:
             if u in fairness and v in goodness:
-                predicted_w = predict(G, u, v, goodness, prediction_type, k, c)
+                predicted_w = predict(G, u, v, goodness, prediction_type)
                 squared_error += (w - predicted_w) ** 2
                 error += abs(w - predicted_w)
                 n += 1
 
-        # print "Prediction type is " + prediction_type
-        # print "RMS error 2: %f" % math.sqrt(squared_error / n)
-        # print "Aboslute mean error: %f" % (error / n)
         rms_error.append(math.sqrt(squared_error / n))
-
-        #print(sum(fairness.values()) / len(fairness.values()))
 
     return rms_error
 
-def predict(G, u, v, goodness, prediction_type, k, c):
+def predict(G, u, v, goodness, prediction_type, k=5, c=3):
     """
     prediction_type is one of "bias", "goodness", or "exclude".
     """
     out_edges = G.out_edges(u, data="weight")
     if (len(out_edges) == 0
         or prediction_type == "goodness"
-        or len(out_edges) <= 5 and (prediction_type == "exclude" or prediction_type == "exclude3")):
+        or len(out_edges) <= k and (prediction_type == "exclude" or prediction_type == "excludec")):
         return goodness[v]
 
-    average_error = calc_absolute_bias(prediction_type, out_edges, goodness, c)
+    if prediction_type == "biasc" or prediction_type == "excludec":
+        average_error = calc_bias_csmoothing(out_edges, goodness, c)
+    else:
+        average_error = calc_absolute_bias(out_edges, goodness)
 
     prediction = goodness[v] + average_error
     if prediction < -1:
@@ -156,8 +145,6 @@ def learn_exclude_number(known_edges):
             G.add_edge(u, v, weight=w)
 
         fairness, goodness = compute_fairness_goodness(G,1)
-
-        # pdb.set_trace()
 
         #Generate RMSE for exclude with k-1,k,k+1 edges
         rms_error = [] #After loop will contain the RMSE of k-1,k,k+1
@@ -248,16 +235,21 @@ def learn_exclude_number2(known_edges):
     k = rms_error.index(min(rms_error)) + k - rng
     return k
 
-def calc_absolute_bias(prediction_type, out_edges, goodness, c):
+def calc_absolute_bias(out_edges, goodness):
     average_error = 0.0
     for _, t, weight in out_edges:
         average_error += weight - goodness[t]
 
-    if prediction_type == "biasc" or prediction_type == "excludec":
-        average_error /= (len(out_edges)+c)
-    else:
-        average_error /= len(out_edges)
+    average_error /= len(out_edges)
 
+    return average_error
+
+def calc_bias_csmoothing(out_edges, goodness, c):
+    average_error = 0.0
+    for _, t, weight in out_edges:
+        average_error += weight - goodness[t]
+
+    average_error /= (len(out_edges)+c)
     return average_error
 
 def calc_extreme_bias(out_edges, goodness):
