@@ -18,6 +18,7 @@ import networkx as nx
 import random
 import sys
 import matplotlib.pyplot as plt
+import pdb
 
 def main():
     file_name = sys.argv[1]
@@ -47,18 +48,27 @@ def main():
             boundary = int(percentage_omit*len(edges))
             test_edges = edges[:boundary]
             known_edges = edges[boundary:]
+            print(len(known_edges))
             rms_error = computeRMS(test_edges, known_edges)
             if rms_error:
                 rms_errors.append(rms_error)
 
     rms_errors = np.array(rms_errors)
     rms_means = np.mean(rms_errors,axis=0)
+    print rms_errors
     print rms_means
     print rms_errors.shape
 
-    plotRMSErrors(rms_errors)
+    plotRMSErrors(rms_errors,file_name)
 
 def computeRMS(test_edges, known_edges):
+    #Get best k value for exclude method
+    # k = learn_exclude_number2(known_edges)
+    # print k
+    k=5
+
+
+
     rms_error = []
     G = nx.DiGraph()
     for u, v, w in known_edges:
@@ -86,14 +96,15 @@ def computeRMS(test_edges, known_edges):
 
     #print(sum(fairness.values()) / len(fairness.values()))
 
-    for prediction_type in ("goodness", "bias", "exclude"):
+    c=3
+    for prediction_type in ("goodness", "bias", "biasc", "exclude", "excludec"):
         squared_error = 0
         error = 0
         n = 0
 
         for u, v, w in test_edges:
             if u in fairness and v in goodness:
-                predicted_w = predict(G, u, v, goodness, prediction_type)
+                predicted_w = predict(G, u, v, goodness, prediction_type, k, c)
                 squared_error += (w - predicted_w) ** 2
                 error += abs(w - predicted_w)
                 n += 1
@@ -107,21 +118,17 @@ def computeRMS(test_edges, known_edges):
 
     return rms_error
 
-def predict(G, u, v, goodness, prediction_type="bias"):
+def predict(G, u, v, goodness, prediction_type, k, c):
     """
     prediction_type is one of "bias", "goodness", or "exclude".
     """
     out_edges = G.out_edges(u, data="weight")
     if (len(out_edges) == 0
         or prediction_type == "goodness"
-        or prediction_type == "exclude" and len(out_edges) <= 5):
+        or len(out_edges) <= 5 and (prediction_type == "exclude" or prediction_type == "exclude3")):
         return goodness[v]
 
-    average_error = 0.0
-    for _, w, weight in out_edges:
-        average_error += weight - goodness[w]
-
-    average_error /= len(out_edges)
+    average_error = calc_absolute_bias(prediction_type, out_edges, goodness, c)
 
     prediction = goodness[v] + average_error
     if prediction < -1:
@@ -136,7 +143,134 @@ The node exclusion algorithm returns goodness for nodes with less than k out edg
 This returns an estimation of the optimal value k.
 """
 def learn_exclude_number(known_edges):
-    return
+    k = 7 #Arbitrary starting point
+    i = 0 #current iteration number
+    maxiter = 5
+    while i < maxiter:
+        random.shuffle(known_edges)
+        validation_edges = known_edges[:10]
+        train_edges = known_edges[10:]
+
+        G = nx.DiGraph()
+        for u, v, w in train_edges:
+            G.add_edge(u, v, weight=w)
+
+        fairness, goodness = compute_fairness_goodness(G,1)
+
+        # pdb.set_trace()
+
+        #Generate RMSE for exclude with k-1,k,k+1 edges
+        rms_error = [] #After loop will contain the RMSE of k-1,k,k+1
+        for potential_k in range(k-1,k+2):
+            #Try out k-1,k,and k+1
+
+            squared_error = 0.
+            error = 0.
+            n = 0.
+            for u, v, w in validation_edges:
+                if u in fairness and v in goodness:
+                    out_edges = G.out_edges(u, data="weight")
+                    predicted_w = 0
+                    if (len(out_edges) <= potential_k):
+                        predicted_w = goodness[v]
+                    else:
+                        average_error = calc_absolute_bias(out_edges, goodness)
+
+                        predicted_w = goodness[v] + average_error
+                        if predicted_w < -1:
+                            predicted_w = -1
+                        elif predicted_w > 1:
+                            predicted_w =  1
+
+                    squared_error += (w - predicted_w) ** 2
+                    error += abs(w - predicted_w)
+                    n += 1
+
+            rms_error.append(math.sqrt(squared_error / n))
+
+        #Pick the best result
+        k_adjustment = rms_error.index(min(rms_error)) - 1
+        print k_adjustment
+        if k_adjustment==0:
+            #current value of k is best
+            print i
+            return k
+        else:
+            k+=k_adjustment
+
+        i+=1
+    print i
+    return k
+
+def learn_exclude_number2(known_edges):
+    k=5
+    rng=5
+
+    random.shuffle(known_edges)
+    validation_edges = known_edges[:10]
+    train_edges = known_edges[10:]
+
+    G = nx.DiGraph()
+    for u, v, w in train_edges:
+        G.add_edge(u, v, weight=w)
+
+    fairness, goodness = compute_fairness_goodness(G,1)
+
+    rms_error = [] #After loop will contain the RMSE of k-1,k,k+1
+    for potential_k in range(k-rng,k+rng+1):
+        #Try out k-1,k,and k+1
+
+        squared_error = 0.
+        error = 0.
+        n = 0.
+        for u, v, w in validation_edges:
+            if u in fairness and v in goodness:
+                out_edges = G.out_edges(u, data="weight")
+                predicted_w = 0
+                if (len(out_edges) <= potential_k):
+                    predicted_w = goodness[v]
+                else:
+                    #######This bias term calculation should be factored out
+                    average_error = calc_absolute_bias(out_edges, goodness)
+
+                    predicted_w = goodness[v] + average_error
+                    if predicted_w < -1:
+                        predicted_w = -1
+                    elif predicted_w > 1:
+                        predicted_w =  1
+
+                squared_error += (w - predicted_w) ** 2
+                error += abs(w - predicted_w)
+                n += 1
+
+        rms_error.append(math.sqrt(squared_error / n))
+
+    k = rms_error.index(min(rms_error)) + k - rng
+    return k
+
+def calc_absolute_bias(prediction_type, out_edges, goodness, c):
+    average_error = 0.0
+    for _, t, weight in out_edges:
+        average_error += weight - goodness[t]
+
+    if prediction_type == "biasc" or prediction_type == "excludec":
+        average_error /= (len(out_edges)+c)
+    else:
+        average_error /= len(out_edges)
+
+    return average_error
+
+def calc_extreme_bias(out_edges, goodness):
+    average_error = 0.0
+    for _, t, weight in out_edges:
+        if weight/goodness[t] > 0:
+            average_error += (abs(weight) - abs(goodness[t]))
+        else:
+            average_error += (abs(weight-goodness[t]))
+
+    average_error /= len(out_edges)
+
+    return average_error
 
 def initialize_scores(G):
     fairness = {}
@@ -193,18 +327,22 @@ def compute_fairness_goodness(G, coeff=1, maxiter=100, epsilon=1e-6):
     return fairness, goodness
 
 # Plot RMS Errors for 1. f*g 2. g 3. g+b 4. g+b with Exclusion
-def plotRMSErrors(rms_errors):
+def plotRMSErrors(rms_errors,file_name):
     # Do graphing
     omit_values = [x * 10 for x in range(1, 10)]
     f_times_g_rms = []
     goodness_rms = []
     goodness_and_bias = []
+    goodness_and_bias_c = []
     exclude = []
+    excludec = []
     for rms_error in rms_errors:
         f_times_g_rms.append(rms_error[0])
         goodness_rms.append(rms_error[1])
         goodness_and_bias.append(rms_error[2])
-        exclude.append(rms_error[3])
+        goodness_and_bias_c.append(rms_error[3])
+        exclude.append(rms_error[4])
+        excludec.append(rms_error[5])
     print(omit_values)
     print(f_times_g_rms)
     # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
@@ -212,11 +350,13 @@ def plotRMSErrors(rms_errors):
     line_fg, = plt.plot(omit_values, f_times_g_rms, 'b.-', label = 'Fairness*Goodness')
     line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
     line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
+    line_g_bias_c, = plt.plot(omit_values, goodness_and_bias_c, 'r.-', label='Goodness+Bias-c')
     line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
-    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_exclude])
+    line_g_exclude_c, = plt.plot(omit_values, excludec, 'm.-', label='Exclude-c')
+    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_bias_c, line_g_exclude, line_g_exclude_c])
     plt.xlabel('Percentage of edges removed')
     plt.ylabel('Root Mean Square Error')
-    plt.title("Wikipedia RFA")
+    plt.title(file_name)
     plt.show()
     plt.savefig('omit_results.png')
 
