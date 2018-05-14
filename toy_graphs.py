@@ -59,7 +59,7 @@ def main():
                 goods.append(goodness[v])
                 ftimesg_predictions.append(predicted_w)
                 squared_error += (w - predicted_w)**2
-                off_amount.append(w)
+                off_amount.append()
                 error += abs(w - predicted_w)
                 n += 1
 

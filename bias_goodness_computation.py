@@ -91,67 +91,67 @@ def computeRMS(test_edges, known_edges):
 
     #print(sum(fairness.values()) / len(fairness.values()))
 
-    # for prediction_type in ("goodness", "bias", "exclude"):
-    #     squared_error = 0
-    #     error = 0
-    #     n = 0
-    #
-    #     for u, v, w in test_edges:
-    #         if u in fairness and v in goodness:
-    #             predicted_w = predict(G, u, v, goodness, prediction_type)
-    #             squared_error += (w - predicted_w) ** 2
-    #             error += abs(w - predicted_w)
-    #             n += 1
-    #
-    #     # print "Prediction type is " + prediction_type
-    #     # print "RMS error 2: %f" % math.sqrt(squared_error / n)
-    #     # print "Aboslute mean error: %f" % (error / n)
-    #     rms_error.append(math.sqrt(squared_error / n))
-    #
-    #     #print(sum(fairness.values()) / len(fairness.values()))
-    #
-    #     for prediction_type in ("goodness", "bias", "exclude"):
-    #         squared_error = 0
-    #         error = 0
-    #         n = 0
-    #
-    #         for u, v, w in test_edges:
-    #             if u in fairness and v in goodness:
-    #                 predicted_w = predict(G, u, v, goodness, prediction_type)
-    #                 squared_error += (w - predicted_w) ** 2
-    #                 error += abs(w - predicted_w)
-    #                 n += 1
-    #
-    #         print "Prediction type is " + prediction_type
-    #         print "RMS error 2: %f" % math.sqrt(squared_error / n)
-    #         print "Aboslute mean error: %f" % (error / n)
-    #         rms_error.append(math.sqrt(squared_error / n))
-    #
-    #     rms_errors.append(rms_error)
-    # # Do graphing
-    # omit_values = [x * 10 for x in range(1, 10)]
-    # f_times_g_rms = []
-    # goodness_rms = []
-    # goodness_and_bias = []
-    # exclude = []
-    # for rms_error in rms_errors:
-    #     f_times_g_rms.append(rms_error[0])
-    #     goodness_rms.append(rms_error[1])
-    #     goodness_and_bias.append(rms_error[2])
-    #     exclude.append(rms_error[3])
-    # print(omit_values)
-    # print(f_times_g_rms)
-    # # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
-    # #          goodness_and_bias, 'y.-', 'hello', omit_values, exclude, 'g.-', 'hello',)
-    # line_fg, = plt.plot(omit_values, f_times_g_rms, 'b.-', label = 'Fairness*Goodness')
-    # line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
-    # line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
-    # line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
-    # plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_exclude])
-    # plt.xlabel('Percentage of edges removed')
-    # plt.ylabel('Root Mean Square Error')
-    # plt.title("Wikipedia RFA")
-    # plt.show()
+    for prediction_type in ("goodness", "bias", "exclude"):
+        squared_error = 0
+        error = 0
+        n = 0
+
+        for u, v, w in test_edges:
+            if u in fairness and v in goodness:
+                predicted_w = predict(G, u, v, goodness, prediction_type)
+                squared_error += (w - predicted_w) ** 2
+                error += abs(w - predicted_w)
+                n += 1
+
+        # print "Prediction type is " + prediction_type
+        # print "RMS error 2: %f" % math.sqrt(squared_error / n)
+        # print "Aboslute mean error: %f" % (error / n)
+        rms_error.append(math.sqrt(squared_error / n))
+
+        #print(sum(fairness.values()) / len(fairness.values()))
+
+        for prediction_type in ("goodness", "bias", "exclude"):
+            squared_error = 0
+            error = 0
+            n = 0
+
+            for u, v, w in test_edges:
+                if u in fairness and v in goodness:
+                    predicted_w = predict(G, u, v, goodness, prediction_type)
+                    squared_error += (w - predicted_w) ** 2
+                    error += abs(w - predicted_w)
+                    n += 1
+
+            print "Prediction type is " + prediction_type
+            print "RMS error 2: %f" % math.sqrt(squared_error / n)
+            print "Aboslute mean error: %f" % (error / n)
+            rms_error.append(math.sqrt(squared_error / n))
+
+        rms_errors.append(rms_error)
+    # Do graphing
+    omit_values = [x * 10 for x in range(1, 10)]
+    f_times_g_rms = []
+    goodness_rms = []
+    goodness_and_bias = []
+    exclude = []
+    for rms_error in rms_errors:
+        f_times_g_rms.append(rms_error[0])
+        goodness_rms.append(rms_error[1])
+        goodness_and_bias.append(rms_error[2])
+        exclude.append(rms_error[3])
+    print(omit_values)
+    print(f_times_g_rms)
+    # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
+    #          goodness_and_bias, 'y.-', 'hello', omit_values, exclude, 'g.-', 'hello',)
+    line_fg, = plt.plot(omit_values, f_times_g_rms, 'b.-', label = 'Fairness*Goodness')
+    line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
+    line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
+    line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
+    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_exclude])
+    plt.xlabel('Percentage of edges removed')
+    plt.ylabel('Root Mean Square Error')
+    plt.title("Wikipedia RFA")
+    plt.show()
     # plt.savefig('omit_results.png')
     #
     # print rms_errors
@@ -187,14 +187,14 @@ def initialize_scores(G):
 
     nodes = G.nodes()
     for node in nodes:
-        bias[node] = 1
+        bias[node] = 0
         try:
             goodness[node] = G.in_degree(node, weight='weight')*1.0/G.in_degree(node)
         except:
             goodness[node] = 0
     return bias, goodness
 
-def compute_bias_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
+def compute_bias_goodness(G, coeff=1, maxiter=20000, epsilon=1e-4):
     bias, goodness = initialize_scores(G)
 
     nodes = G.nodes()
@@ -209,14 +209,14 @@ def compute_bias_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
             inedges = G.in_edges(node, data='weight')
             g = 0
             for edge in inedges:
-                g += edge[2] + bias[edge[0]]
+                g += edge[2] - bias[edge[0]]
 
             try:
                 dg += abs(g/len(inedges) - goodness[node])
                 if abs(g/len(inedges) - goodness[node]) > 0.001:
                     # print(abs(g/len(inedges) - goodness[node]))
                     nums += 1
-                goodness[node] = g/len(inedges)
+                goodness[node] = max(min(g/len(inedges), 1), -1)
             except:
                 pass
 
@@ -232,8 +232,7 @@ def compute_bias_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
             except:
                 pass
 
-        # print(db, dg)
-        # print("\n\n")
+        print(db, dg)
 
         if db < epsilon and dg < epsilon:
             break
