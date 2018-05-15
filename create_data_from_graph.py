@@ -23,8 +23,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import csv
 
-def main():
-    file_name = sys.argv[1]
+def main(file_name, percentage_omit):
     #test_type = sys.argv[2]  # "l1" or "per" (for leave out one edge or remove percentage of edges)
 
     edges = []
@@ -38,7 +37,6 @@ def main():
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
 
-    percentage_omit = 0.20
     boundary = int(percentage_omit * len(edges))
     test_edges = edges[:boundary]
     training_edges = edges[boundary:]
@@ -113,7 +111,7 @@ def create_test_and_train_csv(G_train, G_test, training_edges, test_edges):
             result_array = []
             result_array.extend((in_degree_u, in_degree_v, out_degree_u, out_degree_v, num_common_out, num_common_in, ratio_1, ratio_2, ratio_3, ratio_4, avg_ratings_into_v, avg_ratings_out_of_u, fairness_u, fairness_v, goodness_u, goodness_v, weight))
             csvWriter.writerow(result_array)
-            print("wrote training line %d" % i)
+            #print("wrote training line %d" % i)
             i+=1
 
 
@@ -168,7 +166,7 @@ def create_test_and_train_csv(G_train, G_test, training_edges, test_edges):
             result_array = []
             result_array.extend((in_degree_u, in_degree_v, out_degree_u, out_degree_v, num_common_out, num_common_in, ratio_1, ratio_2, ratio_3, ratio_4, avg_ratings_into_v, avg_ratings_out_of_u, fairness_u, fairness_v, goodness_u, goodness_v, weight))
             csvWriter.writerow(result_array)
-            print("wrote testing line %d" % i)
+            #print("wrote testing line %d" % i)
             i+=1
 
 
@@ -242,6 +240,10 @@ def initialize_scores(G):
     return fairness, goodness
 
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
+
+def run(file_name, percentage_omit):
+    main(file_name, percentage_omit)
+
 
