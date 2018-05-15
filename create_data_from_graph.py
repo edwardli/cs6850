@@ -38,7 +38,7 @@ def main():
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
 
-    percentage_omit = 0.20
+    percentage_omit = 0.99999
     boundary = int(percentage_omit * len(edges))
     test_edges = edges[:boundary]
     training_edges = edges[boundary:]
@@ -113,7 +113,62 @@ def create_test_and_train_csv(G_train, G_test, training_edges, test_edges):
             result_array = []
             result_array.extend((in_degree_u, in_degree_v, out_degree_u, out_degree_v, num_common_out, num_common_in, ratio_1, ratio_2, ratio_3, ratio_4, avg_ratings_into_v, avg_ratings_out_of_u, fairness_u, fairness_v, goodness_u, goodness_v, weight))
             csvWriter.writerow(result_array)
-            print("wrote line %d" % i)
+            print("wrote training line %d" % i)
+            i+=1
+
+
+    with open("test_edges.csv", "w+") as my_csv:
+        csvWriter = csv.writer(my_csv, delimiter=',')
+        csvWriter.writerow(['in_degree_u', 'in_degree_v', 'out_degree_u', 'out_degree_v', 'num_common_out', 'num_common_in', 'ratio_1', 'ratio_2', 'ratio_3', 'ratio_4', 'avg_ratings_into_v', 'avg_ratings_out_of_u', 'fairness_u', 'fairness_v', 'goodness_u', 'goodness_v', 'weight'])
+
+        # Process training edges
+        i = 0
+        fairness, goodness = get_fairness_goodness(test_edges)
+
+        for edge in G_test.edges():
+            u,v = edge
+            weight = G_test.get_edge_data(u,v)['weight']
+            in_degree_u = G_test.in_degree(u)
+            in_degree_v = G_test.in_degree(v)
+            out_degree_u = G_test.out_degree(u)
+            out_degree_v = G_test.out_degree(v)
+            num_common_out = num_common_out_neighbors(G_test, u, v)
+            num_common_in = num_common_in_neighbors(G_test, u, v)
+            ratio_1 = (in_degree_u+1) / (in_degree_v+1)
+            ratio_3 = (out_degree_u+1) / (out_degree_v+1)
+            ratio_2 = (in_degree_u+1) / (out_degree_u+1)
+            ratio_4 = (out_degree_u+1) / (in_degree_v+1)
+
+            edges_into_v = G_test.in_edges(v, data = True)
+            avg_weight_into_v = 0.
+            num_edges_into_v = len(edges_into_v)
+            for a,b,data in edges_into_v:
+                avg_weight_into_v += data['weight']
+            avg_ratings_into_v = (avg_weight_into_v+1) / (num_edges_into_v+1)
+
+
+            edges_out_of_u = G_test.out_edges(u, data=True)
+            avg_weight_out_of_u = 0.
+            num_edges_out_of_u = len(edges_out_of_u)
+            for a, b, data in edges_out_of_u:
+                avg_weight_out_of_u += data['weight']
+
+            avg_ratings_out_of_u = (avg_weight_out_of_u+1) / (num_edges_out_of_u+1)
+
+
+            # For each of people u rates, for positive ratings, calculate u - goodness of that node
+
+            positive_offness_u = 0
+            negative_offness_u = 0
+            # For each of people u rates, for negative ratings calculate u - goodness of that node
+            fairness_u = fairness[u]
+            fairness_v = fairness[v]
+            goodness_u = goodness[u]
+            goodness_v = goodness[v]
+            result_array = []
+            result_array.extend((in_degree_u, in_degree_v, out_degree_u, out_degree_v, num_common_out, num_common_in, ratio_1, ratio_2, ratio_3, ratio_4, avg_ratings_into_v, avg_ratings_out_of_u, fairness_u, fairness_v, goodness_u, goodness_v, weight))
+            csvWriter.writerow(result_array)
+            print("wrote testing line %d" % i)
             i+=1
 
 
@@ -126,24 +181,6 @@ def get_fairness_goodness(known_edges):
     # these two dictionaries have the required scores
     fairness, goodness = compute_fairness_goodness(G, 1)
 
-    # squared_error = 0.
-    # error = 0.
-    # n = 0.
-    #
-    # for u, v, w in test_edges:
-    #     if u in fairness and v in goodness:
-    #         predicted_w = fairness[u] * goodness[v]
-    #         squared_error += (w - predicted_w) ** 2
-    #         error += abs(w - predicted_w)
-    #         n += 1
-    #
-    # if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
-    #     return None
-    # print "RMS error 1: %f" % math.sqrt(squared_error / n)
-    # print "Aboslute mean error: %f" % (error / n)
-    # rms_error.append(math.sqrt(squared_error / n))
-
-    # print(sum(fairness.values()) / len(fairness.values()))
     return fairness, goodness
 
 
