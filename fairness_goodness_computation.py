@@ -44,8 +44,8 @@ def main():
                 rms_errors.append(rms_error)
             edges.insert(i,test_edges[0])
     elif test_type == "per":
+        random.shuffle(edges)
         for percentage_omit in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
-            random.shuffle(edges)
             boundary = int(percentage_omit*len(edges))
             test_edges = edges[:boundary]
             known_edges = edges[boundary:]
@@ -88,7 +88,7 @@ def computeRMS(test_edges, known_edges):
     rms_error = []
     rms_error.append(math.sqrt(squared_error / n))
 
-    for prediction_type in ("goodness", "bias", "biasc", "exclude", "excludec"):
+    for prediction_type in ("goodness", "bias", "biasc", "wbiasc", "exclude", "excludec", "wexcludec"):
         squared_error = 0
         error = 0
         n = 0
@@ -111,11 +111,25 @@ def predict(G, u, v, goodness, prediction_type, k=5, c=3):
     out_edges = G.out_edges(u, data="weight")
     if (len(out_edges) == 0
         or prediction_type == "goodness"
-        or len(out_edges) <= k and (prediction_type == "exclude" or prediction_type == "excludec")):
+        or len(out_edges) <= k and (prediction_type == "exclude" or prediction_type == "excludec" or prediction_type == "wexcludec")):
         return goodness[v]
 
     if prediction_type == "biasc" or prediction_type == "excludec":
         average_error = calc_bias_csmoothing(out_edges, goodness, c)
+    elif prediction_type == "wbiasc" or prediction_type == "wexcludec":
+        ######For weighted average, need to construct the |in(v)| from out_edges, pass to calc_bias_weighted_smoothed
+        """
+
+
+        Just need to actually call this and graph it
+
+
+
+        """
+        in_counts = {}
+        for _,t,_ in out_edges:
+            in_counts[t] = len(G.in_edges(t, data="weight"))
+        average_error = calc_bias_weighted_smoothed(out_edges, goodness, in_counts, c)
     else:
         average_error = calc_absolute_bias(out_edges, goodness)
 
@@ -252,6 +266,16 @@ def calc_bias_csmoothing(out_edges, goodness, c):
     average_error /= (len(out_edges)+c)
     return average_error
 
+def calc_bias_weighted_smoothed(out_edges, goodness, in_counts, c):
+    assert len(out_edges) == len(in_counts)
+    average_error = 0.0
+    for _, t, weight in out_edges:
+        average_error += in_counts[t]*(weight - goodness[t])
+
+    n = sum(in_counts.values())
+    average_error /= (n+c)
+    return average_error
+
 def calc_extreme_bias(out_edges, goodness):
     average_error = 0.0
     for _, t, weight in out_edges:
@@ -326,15 +350,19 @@ def plotRMSErrors(rms_errors,file_name):
     goodness_rms = []
     goodness_and_bias = []
     goodness_and_bias_c = []
+    weight_goodness_and_bias_c = []
     exclude = []
     excludec = []
+    weight_excludec = []
     for rms_error in rms_errors:
         f_times_g_rms.append(rms_error[0])
         goodness_rms.append(rms_error[1])
         goodness_and_bias.append(rms_error[2])
         goodness_and_bias_c.append(rms_error[3])
-        exclude.append(rms_error[4])
-        excludec.append(rms_error[5])
+        weight_goodness_and_bias_c.append(rms_error[4])
+        exclude.append(rms_error[5])
+        excludec.append(rms_error[6])
+        weight_excludec.append(rms_error[7])
     print(omit_values)
     print(f_times_g_rms)
     # plt.plot(omit_values, f_times_g_rms,'b.-', 'hello', omit_values, goodness_rms, 'k.-', 'hello', omit_values,
@@ -343,9 +371,11 @@ def plotRMSErrors(rms_errors,file_name):
     line_g, = plt.plot(omit_values, goodness_rms, 'k.-', label='Goodness')
     line_g_bias, = plt.plot(omit_values, goodness_and_bias, 'g.-', label='Goodness+Bias')
     line_g_bias_c, = plt.plot(omit_values, goodness_and_bias_c, 'r.-', label='Goodness+Bias-c')
+    line_w_g_bias_c, = plt.plot(omit_values, weight_goodness_and_bias_c, 'c.-', label='Weight-Bias-C')
     line_g_exclude, = plt.plot(omit_values, exclude, 'y.-', label='Exclude')
     line_g_exclude_c, = plt.plot(omit_values, excludec, 'm.-', label='Exclude-c')
-    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_bias_c, line_g_exclude, line_g_exclude_c])
+    line_w_g_exclude_c, = plt.plot(omit_values, weight_excludec, 'ko-')
+    plt.legend(handles=[line_fg, line_g, line_g_bias, line_g_bias_c, line_w_g_bias_c, line_g_exclude, line_g_exclude_c, line_w_g_exclude_c])
     plt.xlabel('Percentage of edges removed')
     plt.ylabel('Root Mean Square Error')
     plt.title(file_name)
