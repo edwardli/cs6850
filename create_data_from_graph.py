@@ -38,7 +38,7 @@ def main():
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
 
-    percentage_omit = 0.99999
+    percentage_omit = 0.20
     boundary = int(percentage_omit * len(edges))
     test_edges = edges[:boundary]
     training_edges = edges[boundary:]
