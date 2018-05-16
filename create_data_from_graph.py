@@ -34,11 +34,10 @@ def main():
             edges.append((ls[0], ls[1], float(ls[2])))
 
     # Pick percentage of edges to omit at random
-    random.shuffle(edges)
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
 
-    percentage_omit = 0.90
+    percentage_omit = 0.20
     boundary = int(percentage_omit * len(edges))
     test_edges = edges[:boundary]
     training_edges = edges[boundary:]
@@ -242,6 +241,369 @@ def initialize_scores(G):
             goodness[node] = G.in_degree(node, weight='weight') * 1.0 / G.in_degree(node)
         except:
             goodness[node] = 0
+    return fairness, goodness
+
+
+def computeRMS(test_edges, known_edges):
+    rms_error_fg = []
+    rms_error_g = []
+    rms_error_og = []
+    G = nx.DiGraph()
+    for u, v, w in known_edges:
+        G.add_edge(u, v, weight=w)
+
+    # these two dictionaries have the required scores
+    fairness, goodness = compute_fairness_goodness(G, 1)
+    fairness_og, goodness_og = compute_fairness_goodness_og(G, 1)
+    fairnesses = []
+    goodnesses = []
+    actual_w = []
+
+    # Compute actual fairness/goodness
+    squared_error = 0.
+    error = 0.
+    n = 0.
+
+    for u, v, w in test_edges:
+        if u in fairness_og and v in goodness_og:
+            predicted_w = fairness_og[u] * goodness_og[v]
+            squared_error += (w - predicted_w) ** 2
+            error += abs(w - predicted_w)
+            n += 1
+
+    if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
+        return None
+    # print "Our og approach RMS error 1: %f" % math.sqrt(squared_error / n)
+    # print "Our og approach Absolute mean error: %f" % (error / n)
+    rms_error_og.append(math.sqrt(squared_error / n))
+
+    squared_error = 0.
+    error = 0.
+    n = 0.
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = fairness[u] * goodness[v]
+            squared_error += (w - predicted_w) ** 2
+            error += abs(w - predicted_w)
+            n += 1
+
+    if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
+        return None
+    print "F*G RMS error 1: %f" % math.sqrt(squared_error / n)
+    print "F*G Absolute mean error: %f" % (error / n)
+    rms_error_fg.append(math.sqrt(squared_error / n))
+
+    squared_error = 0.
+    error = 0.
+    n = 0.
+
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = goodness[v]
+            squared_error += (w - predicted_w)**2
+            error += abs(w - predicted_w)
+            n += 1
+
+    if n==0: #Every edge in test_edges has only 1 edge connected to the graph and it was removed
+        return None
+    print "G: RMS error 1: %f" % math.sqrt(squared_error / n)
+    print "G: Aboslute mean error: %f" % (error / n)
+    rms_error_g.append(math.sqrt(squared_error / n))
+    #
+    # plt.hist(actual_w, bins = 10)
+    # plt.xlabel('Edge Weight')
+    # plt.ylabel('Count')
+    # plt.title('Edge Weight Distribution on RFA')
+    # plt.show()
+    return rms_error_fg, rms_error_g, rms_error_og
+
+
+
+def predict(G, u, v, goodness, prediction_type="bias"):
+    """
+    prediction_type is one of "bias", "goodness", or "exclude".
+    """
+    out_edges = G.out_edges(u, data="weight")
+    if (len(out_edges) == 0
+        or prediction_type == "goodness"
+        or prediction_type == "exclude" and len(out_edges) <= 5):
+        return goodness[v]
+
+    average_error = 0.0
+    for _, w, weight in out_edges:
+        average_error += weight - goodness[w]
+
+    average_error /= len(out_edges)
+
+    prediction = goodness[v] + average_error
+    if prediction < -1:
+        return -1
+    if prediction > 1:
+        return 1
+
+    return prediction
+
+
+def initialize_scores(G):
+    fairness = {}
+    goodness = {}
+
+    nodes = G.nodes()
+    for node in nodes:
+        fairness[node] = 1
+        try:
+            goodness[node] = G.in_degree(node, weight='weight') * 1.0 / G.in_degree(node)
+        except:
+            goodness[node] = 0
+    return fairness, goodness
+
+
+def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
+    fairness, goodness = initialize_scores(G)
+
+    nodes = G.nodes()
+    iter = 0
+    while iter < maxiter:
+        if iter == maxiter:
+            print("FUCK")
+        df = 0
+        dg = 0
+
+        for node in nodes:
+            inedges = G.in_edges(node, data='weight')
+            g = 0
+            for edge in inedges:
+                #g += fairness[edge[0]] * edge[2]
+                g += edge[2]
+
+            try:
+                dg += abs(g / len(inedges) - goodness[node])
+                goodness[node] = g / len(inedges)
+            except:
+                pass
+
+        for node in nodes:
+            outedges = G.out_edges(node, data='weight')
+            f = 0.0
+            for edge in outedges:
+                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]]) / 2.0
+            try:
+                df += abs(f / len(outedges) - fairness[node])
+                fairness[node] = f / len(outedges)
+            except:
+                pass
+
+        if df < epsilon and dg < epsilon:
+            break
+
+        iter += 1
+
+    # print "Total iterations: %d" % iter
+
+    return fairness, goodness
+
+
+def compute_fairness_goodness_og(G, coeff=1, maxiter=200, epsilon=1e-4):
+    fairness, goodness = initialize_scores(G)
+
+    nodes = G.nodes()
+    iter = 0
+    while iter < maxiter:
+        if iter == maxiter:
+            print("FUCK")
+        df = 0
+        dg = 0
+
+        for node in nodes:
+            inedges = G.in_edges(node, data='weight')
+            g = 0
+            for edge in inedges:
+                g += fairness[edge[0]] * edge[2]
+                #g += edge[2]
+
+            try:
+                dg += abs(g / len(inedges) - goodness[node])
+                goodness[node] = g / len(inedges)
+            except:
+                pass
+
+        for node in nodes:
+            outedges = G.out_edges(node, data='weight')
+            f = 0.0
+            for edge in outedges:
+                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]]) / 2.0
+            try:
+                df += abs(f / len(outedges) - fairness[node])
+                fairness[node] = f / len(outedges)
+            except:
+                pass
+
+        if df < epsilon and dg < epsilon:
+            break
+
+        iter += 1
+
+    # print "Total iterations: %d" % iter
+
+    return fairness, goodness
+#===============
+
+def computeRMS(test_edges, known_edges):
+    rms_error_fg = []
+    G = nx.DiGraph()
+    for u, v, w in known_edges:
+        G.add_edge(u, v, weight=w)
+
+    # these two dictionaries have the required scores
+    fairness, goodness = compute_fairness_goodness(G, 1)
+
+    # Compute actual fairness/goodness
+    squared_error = 0.
+    error = 0.
+    n = 0.
+
+    for u, v, w in test_edges:
+        if u in fairness and v in goodness:
+            predicted_w = fairness[u] * goodness[v]
+            squared_error += (w - predicted_w) ** 2
+            error += abs(w - predicted_w)
+            n += 1
+
+    if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
+        return None
+    print "F*G RMS error 1: %f" % math.sqrt(squared_error / n)
+    print "F*G Absolute mean error: %f" % (error / n)
+    rms_error_fg.append(math.sqrt(squared_error / n))
+
+
+def predict(G, u, v, goodness, prediction_type="bias"):
+    """
+    prediction_type is one of "bias", "goodness", or "exclude".
+    """
+    out_edges = G.out_edges(u, data="weight")
+    if (len(out_edges) == 0
+        or prediction_type == "goodness"
+        or prediction_type == "exclude" and len(out_edges) <= 5):
+        return goodness[v]
+
+    average_error = 0.0
+    for _, w, weight in out_edges:
+        average_error += weight - goodness[w]
+
+    average_error /= len(out_edges)
+
+    prediction = goodness[v] + average_error
+    if prediction < -1:
+        return -1
+    if prediction > 1:
+        return 1
+
+    return prediction
+
+
+def initialize_scores(G):
+    fairness = {}
+    goodness = {}
+
+    nodes = G.nodes()
+    for node in nodes:
+        fairness[node] = 1
+        try:
+            goodness[node] = G.in_degree(node, weight='weight') * 1.0 / G.in_degree(node)
+        except:
+            goodness[node] = 0
+    return fairness, goodness
+
+
+def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
+    fairness, goodness = initialize_scores(G)
+
+    nodes = G.nodes()
+    iter = 0
+    while iter < maxiter:
+        if iter == maxiter:
+            print("FUCK")
+        df = 0
+        dg = 0
+
+        for node in nodes:
+            inedges = G.in_edges(node, data='weight')
+            g = 0
+            for edge in inedges:
+                #g += fairness[edge[0]] * edge[2]
+                g += edge[2]
+
+            try:
+                dg += abs(g / len(inedges) - goodness[node])
+                goodness[node] = g / len(inedges)
+            except:
+                pass
+
+        for node in nodes:
+            outedges = G.out_edges(node, data='weight')
+            f = 0.0
+            for edge in outedges:
+                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]]) / 2.0
+            try:
+                df += abs(f / len(outedges) - fairness[node])
+                fairness[node] = f / len(outedges)
+            except:
+                pass
+
+        if df < epsilon and dg < epsilon:
+            break
+
+        iter += 1
+
+    # print "Total iterations: %d" % iter
+
+    return fairness, goodness
+
+
+def compute_fairness_goodness_og(G, coeff=1, maxiter=200, epsilon=1e-4):
+    fairness, goodness = initialize_scores(G)
+
+    nodes = G.nodes()
+    iter = 0
+    while iter < maxiter:
+        if iter == maxiter:
+            print("FUCK")
+        df = 0
+        dg = 0
+
+        for node in nodes:
+            inedges = G.in_edges(node, data='weight')
+            g = 0
+            for edge in inedges:
+                g += fairness[edge[0]] * edge[2]
+                #g += edge[2]
+
+            try:
+                dg += abs(g / len(inedges) - goodness[node])
+                goodness[node] = g / len(inedges)
+            except:
+                pass
+
+        for node in nodes:
+            outedges = G.out_edges(node, data='weight')
+            f = 0.0
+            for edge in outedges:
+                f += 1.0 - coeff * abs(edge[2] - goodness[edge[1]]) / 2.0
+            try:
+                df += abs(f / len(outedges) - fairness[node])
+                fairness[node] = f / len(outedges)
+            except:
+                pass
+
+        if df < epsilon and dg < epsilon:
+            break
+
+        iter += 1
+
+    # print "Total iterations: %d" % iter
+
     return fairness, goodness
 
 

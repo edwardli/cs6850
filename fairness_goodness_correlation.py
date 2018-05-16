@@ -31,8 +31,6 @@ def main():
             ls = l.strip().split(",")
             edges.append((ls[0], ls[1], float(ls[2])))
 
-    # Pick percentage of edges to omit at random
-    random.shuffle(edges)
     # each element is an array of arrays that contains the errors for a certain percentage omit
     # rms_errors[0] = [ theirs, just goodness, goodness and bias, exclude] for 0.1 omit
     rms_errors = []
@@ -102,7 +100,7 @@ def computeRMS(test_edges, known_edges):
 
     # these two dictionaries have the required scores
     fairness, goodness = compute_fairness_goodness(G, 1)
-    fairness_og, goodness_og = compute_fairness_goodness_og(G, 1)
+    fairness_us, goodness_us = compute_fairness_goodness_us(G, 1)
     fairnesses = []
     goodnesses = []
     actual_w = []
@@ -113,16 +111,16 @@ def computeRMS(test_edges, known_edges):
     n = 0.
 
     for u, v, w in test_edges:
-        if u in fairness_og and v in goodness_og:
-            predicted_w = fairness_og[u] * goodness_og[v]
+        if u in fairness_us and v in goodness_us:
+            predicted_w = fairness_us[u] * goodness_us[v]
             squared_error += (w - predicted_w) ** 2
             error += abs(w - predicted_w)
             n += 1
 
     if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
         return None
-    print "Our og approach RMS error 1: %f" % math.sqrt(squared_error / n)
-    print "Our og approach Absolute mean error: %f" % (error / n)
+    #print "Our oWN approach RMS error 1: %f" % math.sqrt(squared_error / n)
+    #print "Our oWN approach Absolute mean error: %f" % (error / n)
     rms_error_og.append(math.sqrt(squared_error / n))
 
     squared_error = 0.
@@ -138,8 +136,8 @@ def computeRMS(test_edges, known_edges):
 
     if n == 0:  # Every edge in test_edges has only 1 edge connected to the graph and it was removed
         return None
-    print "F*G RMS error 1: %f" % math.sqrt(squared_error / n)
-    print "F*G Absolute mean error: %f" % (error / n)
+    print(math.sqrt(squared_error / n))
+    # print "F*G Absolute mean error: %f" % (error / n)
     rms_error_fg.append(math.sqrt(squared_error / n))
 
     squared_error = 0.
@@ -156,8 +154,8 @@ def computeRMS(test_edges, known_edges):
 
     if n==0: #Every edge in test_edges has only 1 edge connected to the graph and it was removed
         return None
-    print "G: RMS error 1: %f" % math.sqrt(squared_error / n)
-    print "G: Aboslute mean error: %f" % (error / n)
+    #print "G: RMS error 1: %f" % math.sqrt(squared_error / n)
+    #print "G: Aboslute mean error: %f" % (error / n)
     rms_error_g.append(math.sqrt(squared_error / n))
     #
     # plt.hist(actual_w, bins = 10)
@@ -208,7 +206,7 @@ def initialize_scores(G):
     return fairness, goodness
 
 
-def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
+def compute_fairness_goodness_us(G, coeff=1, maxiter=200, epsilon=1e-4):
     fairness, goodness = initialize_scores(G)
 
     nodes = G.nodes()
@@ -253,7 +251,7 @@ def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
     return fairness, goodness
 
 
-def compute_fairness_goodness_og(G, coeff=1, maxiter=200, epsilon=1e-4):
+def compute_fairness_goodness(G, coeff=1, maxiter=200, epsilon=1e-4):
     fairness, goodness = initialize_scores(G)
 
     nodes = G.nodes()

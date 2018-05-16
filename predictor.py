@@ -9,6 +9,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from sklearn import preprocessing
 import math
 from sklearn import datasets, linear_model
@@ -48,6 +49,29 @@ def fit_decision_tree():
     return dt
 
 def predict_decision_tree(dt):
+    test_df = get_test_data()
+    features = list(test_df.columns[0:len(test_df.columns) -1])
+    print(features)
+    y_true = test_df["weight"]
+    test_X = test_df[features]
+    y_pred = dt.predict(test_X)
+    mean_error = mean_absolute_error(y_true, y_pred)
+    rmse = math.sqrt(mean_squared_error(y_true, y_pred))
+    print(rmse)
+    print(mean_error)
+
+
+def fit_random_forest():
+    train_df = get_training_data()
+    features = list(train_df.columns[0:len(train_df.columns) - 1])
+    y = train_df["weight"]
+    X = train_df[features]
+    dt = RandomForestRegressor(max_depth=6, random_state=0)
+    dt.fit(X, y)
+    return dt
+
+
+def predict_random_forest(dt):
     test_df = get_test_data()
     features = list(test_df.columns[0:len(test_df.columns) -1])
     print(features)
@@ -109,12 +133,13 @@ def predict_linear_regression():
     # plt.show()
 
     # Estimate the top coefficients of the linear model
-    # estimator = LinearRegression()
-    # selector = RFE(estimator, 8, step=1)
-    # selector = selector.fit(X_train_scaled, y_train)
-    # print(selector.n_features_)
-    # print(selector.support_)
-    # print(selector.ranking_)
+    estimator = LinearRegression()
+    selector = RFE(estimator, 5, step=1)
+    selector = selector.fit(X_train_scaled, y_train)
+    print("TOP COEFFICIENTS")
+    print(selector.n_features_)
+    print(selector.support_)
+    print(selector.ranking_)
 
 
 
@@ -131,9 +156,6 @@ def predict_linear_regression():
     # newX = pd.DataFrame({"Constant": np.ones(len(X_train_scaled))}).join(pd.DataFrame(X_train_scaled))
     # MSE = (sum((y_train - predictions) ** 2)) / (len(newX) - len(newX.columns))
     #
-    # # Note if you don't want to use a DataFrame replace the two lines above with
-    # # newX = np.append(np.ones((len(X),1)), X, axis=1)
-    # # MSE = (sum((y-predictions)**2))/(len(newX)-len(newX[0]))
     #
     # var_b = MSE * (np.linalg.inv(np.dot(newX.T, newX)).diagonal())
     # sd_b = np.sqrt(var_b)
@@ -147,7 +169,9 @@ def predict_linear_regression():
     # params = np.round(params, 4)
     #
     # myDF3 = pd.DataFrame()
-    # myDF3["Coefficients"], myDF3["Standard Errors"], myDF3["t values"], myDF3["Probabilites"] = [params, sd_b, ts_b,
+    # coefficients = ['in_degree_u', 'in_degree_v', 'out_degree_u', 'out_degree_v', 'num_common_out', 'num_common_in', 'ratio_1', 'ratio_2',
+    #                 'ratio_3', 'ratio_4', 'avg_ratings_into_v', 'avg_ratings_out_of_u', 'fairness_u', 'fairness_v', 'goodness_u', 'goodness_v','f_times_g']
+    # myDF3["Predictor"], myDF3["Coefficients"], myDF3["Standard Errors"], myDF3["Probabilites"] = [coefficients, params, sd_b,
     #                                                                                              p_values]
     # print(myDF3)
 
@@ -157,7 +181,9 @@ if __name__ == '__main__':
     # decision_tree = fit_decision_tree()
     # predict_decision_tree(decision_tree)
     #predict_kernelized_ridge_regression()
-    predict_linear_regression()
+    # predict_linear_regression()
+    random_forest = fit_random_forest()
+    predict_random_forest(random_forest)
 
 
 
